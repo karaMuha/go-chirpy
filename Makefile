@@ -1,4 +1,4 @@
-build_run:
+run:
 	go build -o out && ./out
 
 goose_up:

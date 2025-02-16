@@ -9,6 +9,8 @@ import (
 type AppState struct {
 	fileserverHits atomic.Int32
 	Platform       string
+	Secret         string
+	PolkaKey       string
 }
 
 func NewAppState(platform string) *AppState {

@@ -17,22 +17,30 @@ import (
 
 func main() {
 	godotenv.Load()
+	secret := os.Getenv("SECRET")
 	dbURL := os.Getenv("DB_URL")
+	platform := os.Getenv("PLATFORM")
+	polkaKey := os.Getenv("POLKA_KEY")
+
+	appState := state.NewAppState(platform)
+	appState.Secret = secret
+	appState.PolkaKey = polkaKey
+
 	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
 		log.Fatalf("Error while connecting to database: %v", err)
 	}
+	err = db.Ping()
+	if err != nil {
+		log.Fatalf("Error while validating database connection: %v", err)
+	}
 
-	platform := os.Getenv("PLATFORM")
-
-	userRepo := repositories.NewUsersRepository(db)
 	chirpRepo := repositories.NewChirpsRepository(db)
+	userRepo := repositories.NewUsersRepository(db)
 
-	userService := service.NewUsersService(userRepo)
+	userService := service.NewUsersService(userRepo, appState)
 	chripsService := service.NewChripsService(chirpRepo)
 	service := service.NewService()
-
-	appState := state.NewAppState(platform)
 
 	restHandler := rest.NewRestHandler(appState, service, userService, chripsService)
 	mux := http.NewServeMux()
@@ -59,6 +67,12 @@ func setupEndpoints(mux *http.ServeMux, handler rest.RestHandler, appState *stat
 	apiHandler.HandleFunc("POST /validate_chirp", handler.HandleValidateChirp)
 	apiHandler.HandleFunc("POST /users", handler.HandleCreateUser)
 	apiHandler.HandleFunc("POST /chirps", handler.HandleCreateChirp)
+	apiHandler.HandleFunc("GET /chirps", handler.HandleGetAllChirps)
+	apiHandler.HandleFunc("GET /chirps/{chirpID}", handler.HandleGetChirpByID)
+	apiHandler.HandleFunc("POST /login", handler.HandleLogin)
+	apiHandler.HandleFunc("PUT /users", handler.HandleUpdateAccount)
+	apiHandler.HandleFunc("DELETE /chirps/{chirpID}", handler.HandleDeleteChirp)
+	apiHandler.HandleFunc("POST /polka/webhooks", handler.HandleUpgradeToRed)
 	mux.Handle("/api/", http.StripPrefix("/api", apiHandler))
 
 	adminHandler := http.NewServeMux()
