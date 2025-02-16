@@ -1,16 +1,40 @@
 package main
 
 import (
+	"database/sql"
 	"log"
 	"net/http"
+	"os"
 
+	"github.com/joho/godotenv"
 	"github.com/karaMuha/go-chirpy/rest"
+	"github.com/karaMuha/go-chirpy/service"
+	"github.com/karaMuha/go-chirpy/sql/repositories"
 	"github.com/karaMuha/go-chirpy/state"
+
+	_ "github.com/lib/pq"
 )
 
 func main() {
-	appState := state.NewAppState()
-	restHandler := rest.NewRestHandler(appState)
+	godotenv.Load()
+	dbURL := os.Getenv("DB_URL")
+	db, err := sql.Open("postgres", dbURL)
+	if err != nil {
+		log.Fatalf("Error while connecting to database: %v", err)
+	}
+
+	platform := os.Getenv("PLATFORM")
+
+	userRepo := repositories.NewUsersRepository(db)
+	chirpRepo := repositories.NewChirpsRepository(db)
+
+	userService := service.NewUsersService(userRepo)
+	chripsService := service.NewChripsService(chirpRepo)
+	service := service.NewService()
+
+	appState := state.NewAppState(platform)
+
+	restHandler := rest.NewRestHandler(appState, service, userService, chripsService)
 	mux := http.NewServeMux()
 	setupEndpoints(mux, restHandler, appState)
 
@@ -32,15 +56,13 @@ func setupEndpoints(mux *http.ServeMux, handler rest.RestHandler, appState *stat
 
 	apiHandler := http.NewServeMux()
 	apiHandler.HandleFunc("GET /healthz", handler.HandleHealthCheck)
-	apiHandler.HandleFunc("GET /metrics", handler.HandleViewMetrics)
-	apiHandler.HandleFunc("POST /reset", handler.HandleResetViewCount)
-
+	apiHandler.HandleFunc("POST /validate_chirp", handler.HandleValidateChirp)
+	apiHandler.HandleFunc("POST /users", handler.HandleCreateUser)
+	apiHandler.HandleFunc("POST /chirps", handler.HandleCreateChirp)
 	mux.Handle("/api/", http.StripPrefix("/api", apiHandler))
 
 	adminHandler := http.NewServeMux()
-	adminHandler.HandleFunc("GET /healthz", handler.HandleHealthCheck)
 	adminHandler.HandleFunc("GET /metrics", handler.HandleViewMetrics)
-	adminHandler.HandleFunc("POST /reset", handler.HandleResetViewCount)
-
+	adminHandler.HandleFunc("POST /reset", handler.HandleReset)
 	mux.Handle("/admin/", http.StripPrefix("/admin", adminHandler))
 }

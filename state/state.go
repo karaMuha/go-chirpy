@@ -8,10 +8,13 @@ import (
 
 type AppState struct {
 	fileserverHits atomic.Int32
+	Platform       string
 }
 
-func NewAppState() *AppState {
-	return &AppState{}
+func NewAppState(platform string) *AppState {
+	return &AppState{
+		Platform: platform,
+	}
 }
 
 func (s *AppState) IncMetrics(next http.Handler) http.Handler {
