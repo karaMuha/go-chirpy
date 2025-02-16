@@ -26,11 +26,21 @@ func main() {
 
 func setupEndpoints(mux *http.ServeMux, handler rest.RestHandler, appState *state.AppState) {
 	pathToStatic := http.Dir("./static")
-	fileServer := http.FileServer(pathToStatic)
-	fileHandlerWithMiddleware := appState.IncMetrics(fileServer)
-	mux.Handle("GET /app", http.StripPrefix("/app", fileHandlerWithMiddleware))
+	fsHandler := http.FileServer(pathToStatic)
+	fsHandlerWithMiddleware := appState.IncMetrics(fsHandler)
+	mux.Handle("/app/", http.StripPrefix("/app", fsHandlerWithMiddleware))
 
-	mux.HandleFunc("GET /healthz", handler.HandleHealthCheck)
-	mux.HandleFunc("GET /metrics", handler.HandleViewMetrics)
-	mux.HandleFunc("POST /reset", handler.HandleResetViewCount)
+	apiHandler := http.NewServeMux()
+	apiHandler.HandleFunc("GET /healthz", handler.HandleHealthCheck)
+	apiHandler.HandleFunc("GET /metrics", handler.HandleViewMetrics)
+	apiHandler.HandleFunc("POST /reset", handler.HandleResetViewCount)
+
+	mux.Handle("/api/", http.StripPrefix("/api", apiHandler))
+
+	adminHandler := http.NewServeMux()
+	adminHandler.HandleFunc("GET /healthz", handler.HandleHealthCheck)
+	adminHandler.HandleFunc("GET /metrics", handler.HandleViewMetrics)
+	adminHandler.HandleFunc("POST /reset", handler.HandleResetViewCount)
+
+	mux.Handle("/admin/", http.StripPrefix("/admin", adminHandler))
 }

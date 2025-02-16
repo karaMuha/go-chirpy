@@ -1,8 +1,8 @@
 package rest
 
 import (
+	"fmt"
 	"net/http"
-	"strconv"
 
 	"github.com/karaMuha/go-chirpy/state"
 )
@@ -25,9 +25,17 @@ func (h *RestHandler) HandleHealthCheck(w http.ResponseWriter, r *http.Request) 
 
 func (h *RestHandler) HandleViewMetrics(w http.ResponseWriter, r *http.Request) {
 	viewCount := h.appState.FileServerHitsCount()
-	result := "Hits: " + strconv.Itoa(int(viewCount))
+	viewCountHtml := fmt.Sprintf(`
+		<html>
+  		<body>
+    		<h1>Welcome, Chirpy Admin</h1>
+    		<p>Chirpy has been visited %d times!</p>
+  		</body>
+		</html>
+	`, viewCount)
 
-	w.Write([]byte(result))
+	w.Write([]byte(viewCountHtml))
+	w.Header().Add("Content-Type:", "text/html")
 	w.WriteHeader(200)
 }
 
