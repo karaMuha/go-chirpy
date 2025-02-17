@@ -218,9 +218,8 @@ func (h *RestHandler) HandleGetChirpByID(w http.ResponseWriter, r *http.Request)
 }
 
 type LoginDto struct {
-	Email     string `json:"email"`
-	Password  string `json:"password"`
-	ExpiresIn int    `json:"expires_in_seconds,omitempty"`
+	Email    string `json:"email"`
+	Password string `json:"password"`
 }
 
 func (h *RestHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
@@ -232,11 +231,7 @@ func (h *RestHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	expirationDuration := data.ExpiresIn
-	if expirationDuration <= 0 || expirationDuration > 3600 {
-		expirationDuration = 3600
-	}
-	user, respErr := h.userService.Login(r.Context(), data.Email, data.Password, expirationDuration)
+	user, respErr := h.userService.Login(r.Context(), data.Email, data.Password, 3600)
 	if respErr != nil {
 		http.Error(w, respErr.Error, respErr.StatusCode)
 		return
@@ -347,6 +342,55 @@ func (h *RestHandler) HandleUpgradeToRed(w http.ResponseWriter, r *http.Request)
 	}
 
 	respErr := h.userService.UpgradeToRed(r.Context(), event.Data.UserID)
+	if respErr != nil {
+		http.Error(w, respErr.Error, respErr.StatusCode)
+		return
+	}
+
+	w.WriteHeader(204)
+}
+
+type Token struct {
+	Token string `json:"token"`
+}
+
+func (h *RestHandler) HandleRefresh(w http.ResponseWriter, r *http.Request) {
+	headers := r.Header
+	token, err := auth.GetBearerToken(headers)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	newJWT, respErr := h.userService.RefreshToken(r.Context(), token)
+	if respErr != nil {
+		http.Error(w, respErr.Error, respErr.StatusCode)
+		return
+	}
+
+	response := Token{
+		Token: newJWT,
+	}
+	respJson, err := json.Marshal(response)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	w.Write(respJson)
+}
+
+func (h *RestHandler) HandleRevoke(w http.ResponseWriter, r *http.Request) {
+	headers := r.Header
+	token, err := auth.GetBearerToken(headers)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	respErr := h.userService.RevokeToken(r.Context(), token)
 	if respErr != nil {
 		http.Error(w, respErr.Error, respErr.StatusCode)
 		return

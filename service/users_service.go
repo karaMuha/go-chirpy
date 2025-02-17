@@ -12,14 +12,20 @@ import (
 )
 
 type UsersService struct {
-	usersRepository repositories.UsersRepository
-	appState        *state.AppState
+	usersRepository  repositories.UsersRepository
+	appState         *state.AppState
+	refreshTokenRepo repositories.RefreshTokenRepository
 }
 
-func NewUsersService(usersRepository repositories.UsersRepository, appState *state.AppState) UsersService {
+func NewUsersService(
+	usersRepository repositories.UsersRepository,
+	appState *state.AppState,
+	refreshTokenRepo repositories.RefreshTokenRepository,
+) UsersService {
 	return UsersService{
-		usersRepository: usersRepository,
-		appState:        appState,
+		usersRepository:  usersRepository,
+		appState:         appState,
+		refreshTokenRepo: refreshTokenRepo,
 	}
 }
 
@@ -51,8 +57,20 @@ func (s *UsersService) Login(ctx context.Context, email, password string, expira
 			StatusCode: http.StatusInternalServerError,
 		}
 	}
-
 	user.Token = token
+
+	refreshToken, err := auth.MakeRefreshToken()
+	if err != nil {
+		return nil, &models.ResponseErr{
+			Error:      err.Error(),
+			StatusCode: http.StatusInternalServerError,
+		}
+	}
+	respErr = s.refreshTokenRepo.SaveRefreshToken(ctx, refreshToken, user.ID.String(), time.Now().Add(60*24*time.Hour))
+	if respErr != nil {
+		return nil, respErr
+	}
+	user.RefreshToken = refreshToken
 
 	return user, nil
 }
@@ -79,4 +97,36 @@ func (s *UsersService) UpdateAccount(ctx context.Context, userID, email, passwor
 
 func (s *UsersService) UpgradeToRed(ctx context.Context, userID string) *models.ResponseErr {
 	return s.usersRepository.UpgradeToRed(ctx, userID)
+}
+
+func (s *UsersService) RefreshToken(ctx context.Context, token string) (string, *models.ResponseErr) {
+	refreshToken, respErr := s.refreshTokenRepo.GetToken(ctx, token)
+	if respErr != nil {
+		return "", respErr
+	}
+	if refreshToken.ExpiresAt.Before(time.Now()) {
+		return "", &models.ResponseErr{
+			Error:      "Token expired",
+			StatusCode: http.StatusUnauthorized,
+		}
+	}
+	if refreshToken.RevokedAt.Valid {
+		return "", &models.ResponseErr{
+			Error:      "Token revoked",
+			StatusCode: http.StatusUnauthorized,
+		}
+	}
+	newJWT, err := auth.MakeJWT(refreshToken.UserID, s.appState.Secret, 3600)
+	if err != nil {
+		return "", &models.ResponseErr{
+			Error:      err.Error(),
+			StatusCode: http.StatusInternalServerError,
+		}
+	}
+
+	return newJWT, nil
+}
+
+func (s *UsersService) RevokeToken(ctx context.Context, token string) *models.ResponseErr {
+	return s.refreshTokenRepo.RevokeToken(ctx, token)
 }

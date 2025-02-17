@@ -37,8 +37,9 @@ func main() {
 
 	chirpRepo := repositories.NewChirpsRepository(db)
 	userRepo := repositories.NewUsersRepository(db)
+	refreshTokenRepo := repositories.NewRefreshTokenRepository(db)
 
-	userService := service.NewUsersService(userRepo, appState)
+	userService := service.NewUsersService(userRepo, appState, refreshTokenRepo)
 	chripsService := service.NewChripsService(chirpRepo)
 	service := service.NewService()
 
@@ -73,6 +74,8 @@ func setupEndpoints(mux *http.ServeMux, handler rest.RestHandler, appState *stat
 	apiHandler.HandleFunc("PUT /users", handler.HandleUpdateAccount)
 	apiHandler.HandleFunc("DELETE /chirps/{chirpID}", handler.HandleDeleteChirp)
 	apiHandler.HandleFunc("POST /polka/webhooks", handler.HandleUpgradeToRed)
+	apiHandler.HandleFunc("POST /refresh", handler.HandleRefresh)
+	apiHandler.HandleFunc("POST /revoke", handler.HandleRevoke)
 	mux.Handle("/api/", http.StripPrefix("/api", apiHandler))
 
 	adminHandler := http.NewServeMux()

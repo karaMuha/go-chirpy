@@ -1,6 +1,8 @@
 package auth
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"net/http"
 	"strings"
@@ -73,4 +75,14 @@ func GetAPIKey(headers http.Header) (string, error) {
 		return "", errors.New("api key not present")
 	}
 	return key, nil
+}
+
+func MakeRefreshToken() (string, error) {
+	data := make([]byte, 32)
+	_, err := rand.Read(data)
+	if err != nil {
+		return "", err
+	}
+
+	return hex.EncodeToString(data), nil
 }
